@@ -12,14 +12,16 @@ export function formatDate(date) {
 }
 
 // Bridge giữa Oracle (UPPERCASE keys) và normal JS (lowercase)
+// Hỗ trợ cả PRODUCT_NAME / PRODUCT_SIZE (tên cột thật trong DB)
+// vì BE không thể alias `AS size` (SIZE là reserved word của Oracle gây ORA-00923)
 export function normalizeProduct(p) {
     if (!p) return null;
     return {
         product_id:     p.PRODUCT_ID     || p.product_id,
         user_id:        p.USER_ID        || p.user_id,
-        name:           p.NAME           || p.name,
+        name:           p.PRODUCT_NAME   || p.product_name || p.NAME || p.name,
         weight:         p.WEIGHT         || p.weight,
-        size:           p.SIZE           || p.size,
+        size:           p.PRODUCT_SIZE   || p.product_size || p.SIZE || p.size,
         origin:         p.ORIGIN         || p.origin,
         brand:          p.BRAND          || p.brand,
         description:    p.DESCRIPTION    || p.description,
@@ -44,7 +46,7 @@ export function normalizeOrder(o) {
         item_count:       o.ITEM_COUNT       || o.item_count,
         items:            (o.items || []).map(i => ({
             product_id: i.PRODUCT_ID || i.product_id,
-            name:       i.NAME       || i.name,
+            name:       i.PRODUCT_NAME || i.product_name || i.NAME || i.name,
             quantity:   i.QUANTITY   || i.quantity,
             unit_price: Number(i.UNIT_PRICE || i.unit_price || 0),
             subtotal:   Number(i.SUBTOTAL || i.subtotal || 0),

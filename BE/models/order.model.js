@@ -1,11 +1,10 @@
 /**
- * order.model.js - Oracle version
+ * order.model.js - Oracle version (FIXED v2)
  *
- * Demo phức tạp hơn: tạo order CÓ TRANSACTION với nhiều bảng:
- *   1. ORDERS    (header)
- *   2. ORDER_DETAIL (line items)
- *   3. PAYMENT, DELIVERY (sub-info)
- * Tất cả nằm trong cùng 1 transaction → COMMIT một lần.
+ * Sửa lỗi:
+ *   1. ORA-01745: bind `:uid` → `:p_user_id`
+ *   2. ORA-01747: items dùng `p.name` không tồn tại → đổi thành `p.product_name`
+ *      (KHÔNG dùng alias để tránh xung đột với reserved word)
  */
 import oracledb from 'oracledb';
 import { getConnection } from '../config/configDatabase.js';
@@ -16,38 +15,32 @@ const Order = function (order) {
     this.delivery_address = order.delivery_address;
 };
 
-// =============================================================
-// 1. CREATE ORDER + DETAILS (Transaction quan trọng nhất)
-// =============================================================
 Order.create = async (newOrder, items) => {
     const conn = await getConnection();
     try {
-        // -- 1.1 Tạo ORDER header → lấy order_id từ sequence --
         const orderResult = await conn.execute(
             `INSERT INTO ORDERS (order_id, user_id, status, delivery_address, total_amount, created_at)
              VALUES ('O' || TO_CHAR(SYSDATE, 'YYMM') || LPAD(SEQ_ORDERS.NEXTVAL, 5, '0'),
-                     :user_id, :status, :addr, 0, SYSTIMESTAMP)
+                     :p_user_id, :p_status, :p_addr, 0, SYSTIMESTAMP)
              RETURNING order_id INTO :p_order_id`,
             {
-                user_id:    newOrder.user_id,
-                status:     newOrder.status,
-                addr:       newOrder.delivery_address,
+                p_user_id:  newOrder.user_id,
+                p_status:   newOrder.status,
+                p_addr:     newOrder.delivery_address,
                 p_order_id: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 20 },
             }
         );
 
         const orderId = orderResult.outBinds.p_order_id[0];
 
-        // -- 1.2 Insert ORDER_DETAIL cho từng item --
         let totalAmount = 0;
         const detailRows = [];
 
         for (const item of items) {
-            // Lấy giá hiện tại của sản phẩm (snapshot tại thời điểm đặt hàng)
             const priceResult = await conn.execute(
                 `SELECT price, stock_quantity FROM PRODUCT
-                 WHERE product_id = :pid FOR UPDATE`,  // FOR UPDATE = lock row cho concurrency
-                { pid: item.product_id }
+                 WHERE product_id = :p_pid FOR UPDATE`,
+                { p_pid: item.product_id }
             );
 
             if (priceResult.rows.length === 0) {
@@ -71,15 +64,13 @@ Order.create = async (newOrder, items) => {
                 subtotal:   subtotal,
             });
 
-            // Trừ tồn kho
             await conn.execute(
-                `UPDATE PRODUCT SET stock_quantity = stock_quantity - :q
-                 WHERE product_id = :pid`,
-                { q: item.quantity, pid: item.product_id }
+                `UPDATE PRODUCT SET stock_quantity = stock_quantity - :p_qty
+                 WHERE product_id = :p_pid`,
+                { p_qty: item.quantity, p_pid: item.product_id }
             );
         }
 
-        // Bulk insert ORDER_DETAIL
         await conn.executeMany(
             `INSERT INTO ORDER_DETAIL (order_detail_id, order_id, product_id, quantity, unit_price, subtotal)
              VALUES ('OD' || LPAD(SEQ_ORDER_DETAIL.NEXTVAL, 7, '0'),
@@ -87,13 +78,11 @@ Order.create = async (newOrder, items) => {
             detailRows
         );
 
-        // -- 1.3 Cập nhật total_amount của ORDERS --
         await conn.execute(
-            `UPDATE ORDERS SET total_amount = :total WHERE order_id = :id`,
-            { total: totalAmount, id: orderId }
+            `UPDATE ORDERS SET total_amount = :p_total WHERE order_id = :p_id`,
+            { p_total: totalAmount, p_id: orderId }
         );
 
-        // -- COMMIT toàn bộ transaction --
         await conn.commit();
 
         console.log(`✅ Order ${orderId} created with total ${totalAmount}`);
@@ -104,7 +93,7 @@ Order.create = async (newOrder, items) => {
         };
 
     } catch (err) {
-        await conn.rollback();   // → rollback tất cả nếu có lỗi
+        await conn.rollback();
         console.error('Lỗi tạo order:', err.message);
         throw err;
     } finally {
@@ -112,13 +101,9 @@ Order.create = async (newOrder, items) => {
     }
 };
 
-// =============================================================
-// 2. FIND BY ID (JOIN nhiều bảng - Query loại f)
-// =============================================================
 Order.findById = async (orderId) => {
     const conn = await getConnection();
     try {
-        // Header
         const headerResult = await conn.execute(
             `SELECT o.order_id, o.user_id, o.status, o.delivery_address,
                     o.total_amount, o.created_at,
@@ -126,21 +111,23 @@ Order.findById = async (orderId) => {
                     u.email, u.phone_number
              FROM   ORDERS o
              JOIN   USERS u ON o.user_id = u.user_id
-             WHERE  o.order_id = :id`,
-            { id: orderId }
+             WHERE  o.order_id = :p_id`,
+            { p_id: orderId }
         );
 
         if (headerResult.rows.length === 0) throw { kind: 'not_found' };
         const order = headerResult.rows[0];
 
-        // Items
+        // Items: dùng product_name (không alias) — FE format.js sẽ map về i.name
         const itemsResult = await conn.execute(
             `SELECT od.order_detail_id, od.product_id, od.quantity,
-                    od.unit_price, od.subtotal, p.name, p.image_url
+                    od.unit_price, od.subtotal,
+                    p.product_name,
+                    p.image_url
              FROM   ORDER_DETAIL od
              JOIN   PRODUCT p ON od.product_id = p.product_id
-             WHERE  od.order_id = :id`,
-            { id: orderId }
+             WHERE  od.order_id = :p_id`,
+            { p_id: orderId }
         );
 
         order.items = itemsResult.rows;
@@ -150,20 +137,19 @@ Order.findById = async (orderId) => {
     }
 };
 
-// =============================================================
-// 3. GET ORDERS BY USER (Query với subquery - loại g)
-// =============================================================
+// findByUser: bind name `:p_user_id` (đã sửa từ :uid để tránh ORA-01745)
 Order.findByUser = async (userId) => {
     const conn = await getConnection();
     try {
         const result = await conn.execute(
-            `SELECT o.*,
+            `SELECT o.order_id, o.user_id, o.status, o.delivery_address,
+                    o.total_amount, o.created_at, o.updated_at,
                     (SELECT COUNT(*) FROM ORDER_DETAIL od WHERE od.order_id = o.order_id)
                        AS item_count
              FROM   ORDERS o
-             WHERE  o.user_id = :uid
+             WHERE  o.user_id = :p_user_id
              ORDER BY o.created_at DESC`,
-            { uid: userId }
+            { p_user_id: userId }
         );
         return result.rows;
     } finally {
@@ -171,9 +157,6 @@ Order.findByUser = async (userId) => {
     }
 };
 
-// =============================================================
-// 4. STATISTICS (Aggregate functions - loại h)
-// =============================================================
 Order.getStatistics = async () => {
     const conn = await getConnection();
     try {
@@ -194,16 +177,13 @@ Order.getStatistics = async () => {
     }
 };
 
-// =============================================================
-// 5. UPDATE STATUS
-// =============================================================
 Order.updateStatus = async (orderId, status) => {
     const conn = await getConnection();
     try {
         const result = await conn.execute(
-            `UPDATE ORDERS SET status = :s, updated_at = SYSTIMESTAMP
-             WHERE order_id = :id`,
-            { s: status, id: orderId },
+            `UPDATE ORDERS SET status = :p_status, updated_at = SYSTIMESTAMP
+             WHERE order_id = :p_id`,
+            { p_status: status, p_id: orderId },
             { autoCommit: true }
         );
         if (result.rowsAffected === 0) throw { kind: 'not_found' };
@@ -213,9 +193,6 @@ Order.updateStatus = async (orderId, status) => {
     }
 };
 
-// =============================================================
-// 6. GET ALL
-// =============================================================
 Order.getAll = async () => {
     const conn = await getConnection();
     try {

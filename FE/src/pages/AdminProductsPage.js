@@ -32,7 +32,7 @@ export default function AdminProductsPage() {
             const data = await productApi.bySeller(user.user_id);
             setProducts(data.map(normalizeProduct));
         } catch (err) {
-            show('Lỗi tải: ' + err.message, 'error');
+            show('Lỗi tải sản phẩm: ' + err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -97,11 +97,11 @@ export default function AdminProductsPage() {
         }
     }
 
-    async function handleDelete(id) {
-        if (!window.confirm(`Xóa sản phẩm ${id}?`)) return;
+    async function handleDelete(p) {
+        if (!window.confirm(`Bạn chắc chắn muốn xóa "${p.name}"?\nMã: ${p.product_id}`)) return;
         try {
-            await productApi.remove(id);
-            show('Đã xóa', 'success');
+            await productApi.remove(p.product_id);
+            show('Đã xóa sản phẩm', 'success');
             load();
         } catch (err) {
             show('Lỗi xóa: ' + err.message, 'error');
@@ -112,8 +112,11 @@ export default function AdminProductsPage() {
         <div>
             <div className="bg-white rounded-lg shadow-sm p-4 mb-4 flex items-center justify-between">
                 <div>
-                    <h1 className="text-lg font-bold">Quản lý sản phẩm</h1>
-                    <p className="text-xs text-gray-500 mt-0.5">Demo: INSERT, UPDATE, DELETE, query by seller (single condition)</p>
+                    <h1 className="text-lg font-bold">Quản lý sản phẩm của tôi</h1>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        Tổng số: <strong>{products.length}</strong> sản phẩm —
+                        Bấm <Pencil className="inline" size={12}/> để sửa hoặc <Trash className="inline" size={12}/> để xóa
+                    </p>
                 </div>
                 <button
                     onClick={openAdd}
@@ -126,7 +129,15 @@ export default function AdminProductsPage() {
             {loading ? (
                 <div className="bg-white p-8 text-center text-gray-500 rounded">Đang tải...</div>
             ) : products.length === 0 ? (
-                <div className="bg-white p-12 text-center text-gray-500 rounded">Chưa có sản phẩm. Bấm "Thêm sản phẩm" để bắt đầu.</div>
+                <div className="bg-white p-12 text-center rounded">
+                    <div className="text-gray-500 mb-3">Bạn chưa có sản phẩm nào.</div>
+                    <button
+                        onClick={openAdd}
+                        className="bg-shopee-500 hover:bg-shopee-600 text-white px-5 py-2 rounded text-sm font-medium inline-flex items-center gap-1"
+                    >
+                        <Plus size={16}/> Đăng sản phẩm đầu tiên
+                    </button>
+                </div>
             ) : (
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <table className="w-full text-sm">
@@ -150,7 +161,7 @@ export default function AdminProductsPage() {
                                                 <img src={p.image_url} alt="" className="w-10 h-10 object-cover rounded"
                                                      onError={e => { e.target.style.display = 'none'; }}/>
                                             )}
-                                            <span className="line-clamp-1">{p.name}</span>
+                                            <span className="line-clamp-1">{p.name || <em className="text-gray-400">(không có tên)</em>}</span>
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-right text-shopee-500 font-medium">{formatCurrency(p.price)}</td>
@@ -161,12 +172,22 @@ export default function AdminProductsPage() {
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-center">
-                                        <button onClick={() => openEdit(p)} className="text-blue-500 hover:text-blue-700 mr-2" title="Sửa">
-                                            <Pencil size={16}/>
-                                        </button>
-                                        <button onClick={() => handleDelete(p.product_id)} className="text-red-500 hover:text-red-700" title="Xóa">
-                                            <Trash size={16}/>
-                                        </button>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => openEdit(p)}
+                                                className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded text-xs font-medium inline-flex items-center gap-1"
+                                                title="Sửa sản phẩm"
+                                            >
+                                                <Pencil size={12}/> Sửa
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(p)}
+                                                className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded text-xs font-medium inline-flex items-center gap-1"
+                                                title="Xóa sản phẩm"
+                                            >
+                                                <Trash size={12}/> Xóa
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -180,7 +201,7 @@ export default function AdminProductsPage() {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
-                            <h2 className="font-bold">{editingId ? 'Sửa sản phẩm' : 'Thêm sản phẩm mới'}</h2>
+                            <h2 className="font-bold">{editingId ? `Sửa sản phẩm — ${editingId}` : 'Thêm sản phẩm mới'}</h2>
                             <button onClick={() => setShowForm(false)}><X size={20}/></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -205,8 +226,24 @@ export default function AdminProductsPage() {
                             <FormField label="Kích thước">
                                 <input value={form.size} onChange={e => setForm({...form, size: e.target.value})} className="w-full border rounded px-3 py-2 text-sm"/>
                             </FormField>
-                            <FormField label="Image URL" full>
-                                <input value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." className="w-full border rounded px-3 py-2 text-sm"/>
+                            <FormField label="Image URL (link ảnh, tối đa 2000 ký tự)" full>
+                                <textarea
+                                    value={form.image_url}
+                                    onChange={e => setForm({...form, image_url: e.target.value})}
+                                    placeholder="https://example.com/image.jpg"
+                                    rows={2}
+                                    maxLength={2000}
+                                    className="w-full border rounded px-3 py-2 text-sm font-mono"
+                                />
+                                <div className="text-xs text-gray-400 mt-1">{form.image_url.length}/2000 ký tự</div>
+                                {form.image_url && (
+                                    <img
+                                        src={form.image_url}
+                                        alt="Xem trước"
+                                        className="mt-2 max-h-32 object-contain border rounded"
+                                        onError={e => { e.target.style.display = 'none'; }}
+                                    />
+                                )}
                             </FormField>
                             <FormField label="Mô tả" full>
                                 <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} rows={3} className="w-full border rounded px-3 py-2 text-sm"/>

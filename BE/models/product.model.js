@@ -1,18 +1,16 @@
 /**
- * product.model.js - Oracle version
+ * product.model.js - Oracle version (FIXED v2)
  *
- * Khác biệt chính so với MySQL:
- *   1. Bind parameters: dùng :name thay vì ?
- *   2. Procedure output: dùng oracledb.BIND_OUT thay vì @user_var
- *   3. Không có conn.beginTransaction() - tự động trong session
- *   4. conn.commit() / conn.rollback() rõ ràng
- *   5. conn.close() thay vì conn.release()
- *   6. CLOB cho mô tả dài → tự động convert string nhờ fetchAsString config
+ * Sửa lỗi:
+ *   1. ORA-01745: bind `:uid` → `:p_user_id` (UID là hàm dựng sẵn của Oracle)
+ *   2. ORA-01747: cột `name`/`size` không tồn tại → dùng `product_name`/`product_size`
+ *   3. ORA-00923: bỏ alias `AS size` (vì SIZE là từ khóa dự phòng/reserved trong Oracle)
+ *      → SELECT trả về cột gốc PRODUCT_NAME, PRODUCT_SIZE
+ *      → FE format.js đã được cập nhật để map về name/size
  */
 import oracledb from 'oracledb';
 import { getConnection } from '../config/configDatabase.js';
 
-// Constructor giữ nguyên API
 const Product = function (product) {
     this.user_id        = product.user_id;
     this.category_ids   = product.category_ids || [];
@@ -28,13 +26,9 @@ const Product = function (product) {
     this.status         = product.status || 'active';
 };
 
-// =============================================================
-// 1. CREATE - Gọi PROCEDURE insert_product với OUT parameter
-// =============================================================
 Product.create = async (newProduct) => {
     const conn = await getConnection();
     try {
-        // Gọi procedure: insert_product(IN... , OUT p_new_product_id)
         const result = await conn.execute(
             `BEGIN
                 insert_product(
@@ -55,7 +49,6 @@ Product.create = async (newProduct) => {
                 p_price:          newProduct.price,
                 p_stock:          newProduct.stock_quantity,
                 p_image_url:      newProduct.image_url,
-                // OUT parameter - nhận về product_id mới
                 p_new_product_id: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 20 },
             }
         );
@@ -63,7 +56,6 @@ Product.create = async (newProduct) => {
         const productId = result.outBinds.p_new_product_id;
         if (!productId) throw new Error('Không thể tạo sản phẩm.');
 
-        // Insert vào bảng BELONG (product ↔ category)
         if (newProduct.category_ids && newProduct.category_ids.length > 0) {
             const belongRows = newProduct.category_ids.map(catId => ({
                 p_id: productId,
@@ -88,22 +80,31 @@ Product.create = async (newProduct) => {
     }
 };
 
-// =============================================================
-// 2. FIND BY ID - Query đơn với LISTAGG để gộp category_ids
-// =============================================================
 Product.findById = async (productId) => {
     const conn = await getConnection();
     try {
         const result = await conn.execute(
-            `SELECT p.*, 
+            `SELECT p.product_id,
+                    p.user_id,
+                    p.product_name,
+                    p.weight,
+                    p.product_size,
+                    p.origin,
+                    p.brand,
+                    p.description,
+                    p.price,
+                    p.stock_quantity,
+                    p.image_url,
+                    p.status,
+                    p.created_at,
                     LISTAGG(b.category_id, ',') WITHIN GROUP (ORDER BY b.category_id) AS category_ids
              FROM   PRODUCT p
              LEFT JOIN BELONG b ON p.product_id = b.product_id
-             WHERE  p.product_id = :id
-             GROUP BY p.product_id, p.user_id, p.name, p.weight, p.size,
+             WHERE  p.product_id = :p_id
+             GROUP BY p.product_id, p.user_id, p.product_name, p.weight, p.product_size,
                       p.origin, p.brand, p.description, p.price,
                       p.stock_quantity, p.image_url, p.status, p.created_at`,
-            { id: productId }
+            { p_id: productId }
         );
 
         if (result.rows.length === 0) throw { kind: 'not_found' };
@@ -118,14 +119,16 @@ Product.findById = async (productId) => {
     }
 };
 
-// =============================================================
-// 3. GET ALL
-// =============================================================
 Product.getAll = async () => {
     const conn = await getConnection();
     try {
         const result = await conn.execute(
-            `SELECT * FROM PRODUCT WHERE status = 'active' ORDER BY created_at DESC`
+            `SELECT p.product_id, p.user_id, p.product_name, p.weight, p.product_size,
+                    p.origin, p.brand, p.description, p.price,
+                    p.stock_quantity, p.image_url, p.status, p.created_at
+             FROM PRODUCT p
+             WHERE p.status = 'active'
+             ORDER BY p.created_at DESC`
         );
         return result.rows;
     } finally {
@@ -133,19 +136,18 @@ Product.getAll = async () => {
     }
 };
 
-// =============================================================
-// 4. FIND BY CATEGORY (JOIN query)
-// =============================================================
 Product.findByCategory = async (categoryId) => {
     const conn = await getConnection();
     try {
         const result = await conn.execute(
-            `SELECT p.*
+            `SELECT p.product_id, p.user_id, p.product_name, p.weight, p.product_size,
+                    p.origin, p.brand, p.description, p.price,
+                    p.stock_quantity, p.image_url, p.status, p.created_at
              FROM   PRODUCT p
              JOIN   BELONG b ON p.product_id = b.product_id
-             WHERE  b.category_id = :cid
+             WHERE  b.category_id = :p_cat_id
                AND  p.status = 'active'`,
-            { cid: categoryId }
+            { p_cat_id: categoryId }
         );
         return result.rows;
     } finally {
@@ -153,15 +155,17 @@ Product.findByCategory = async (categoryId) => {
     }
 };
 
-// =============================================================
-// 5. FIND BY SELLER (single condition)
-// =============================================================
 Product.findBySeller = async (sellerId) => {
     const conn = await getConnection();
     try {
         const result = await conn.execute(
-            `SELECT * FROM PRODUCT WHERE user_id = :uid`,
-            { uid: sellerId }
+            `SELECT p.product_id, p.user_id, p.product_name, p.weight, p.product_size,
+                    p.origin, p.brand, p.description, p.price,
+                    p.stock_quantity, p.image_url, p.status, p.created_at
+             FROM PRODUCT p
+             WHERE p.user_id = :p_user_id
+             ORDER BY p.created_at DESC`,
+            { p_user_id: sellerId }
         );
         return result.rows;
     } finally {
@@ -169,9 +173,6 @@ Product.findBySeller = async (sellerId) => {
     }
 };
 
-// =============================================================
-// 6. UPDATE - Gọi PROCEDURE update_product
-// =============================================================
 Product.updateById = async (productId, product) => {
     const conn = await getConnection();
     try {
@@ -199,11 +200,10 @@ Product.updateById = async (productId, product) => {
             }
         );
 
-        // Cập nhật BELONG nếu có category_ids
         if (product.category_ids) {
             await conn.execute(
-                `DELETE FROM BELONG WHERE product_id = :id`,
-                { id: productId }
+                `DELETE FROM BELONG WHERE product_id = :p_id`,
+                { p_id: productId }
             );
             if (product.category_ids.length > 0) {
                 const belongRows = product.category_ids.map(catId => ({
@@ -222,8 +222,7 @@ Product.updateById = async (productId, product) => {
 
     } catch (err) {
         await conn.rollback();
-        // Map Oracle error message → kind code
-        if (err.errorNum === 20001 || /không tồn tại|không thuộc/.test(err.message)) {
+        if (err.errorNum === 20011 || /không tồn tại|không thuộc/.test(err.message)) {
             throw { kind: 'not_found_or_unauthorized' };
         }
         throw err;
@@ -232,15 +231,12 @@ Product.updateById = async (productId, product) => {
     }
 };
 
-// =============================================================
-// 7. DELETE
-// =============================================================
 Product.remove = async (productId, userId) => {
     const conn = await getConnection();
     try {
         await conn.execute(
-            `BEGIN delete_product(:p_id, :p_uid); END;`,
-            { p_id: productId, p_uid: userId },
+            `BEGIN delete_product(:p_id, :p_user_id); END;`,
+            { p_id: productId, p_user_id: userId },
             { autoCommit: true }
         );
         return { message: 'Product deleted successfully' };
@@ -253,9 +249,6 @@ Product.remove = async (productId, userId) => {
     }
 };
 
-// =============================================================
-// 8. DELETE ALL
-// =============================================================
 Product.removeAll = async () => {
     const conn = await getConnection();
     try {
@@ -271,14 +264,18 @@ Product.removeAll = async () => {
     }
 };
 
-// =============================================================
-// 9. SEARCH (composite condition + aggregate)
-// =============================================================
 Product.search = async ({ keyword, minPrice, maxPrice, categoryId }) => {
     const conn = await getConnection();
     try {
         let sql = `
-            SELECT p.product_id, p.name, p.price, p.stock_quantity,
+            SELECT p.product_id,
+                   p.product_name,
+                   p.price,
+                   p.stock_quantity,
+                   p.image_url,
+                   p.product_size,
+                   p.brand,
+                   p.origin,
                    COUNT(r.rating_id) AS review_count,
                    AVG(r.rating)      AS avg_rating
             FROM   PRODUCT p
@@ -287,25 +284,26 @@ Product.search = async ({ keyword, minPrice, maxPrice, categoryId }) => {
         const params = {};
 
         if (keyword) {
-            sql += ` AND LOWER(p.name) LIKE LOWER(:kw)`;
-            params.kw = `%${keyword}%`;
+            sql += ` AND LOWER(p.product_name) LIKE LOWER(:p_kw)`;
+            params.p_kw = `%${keyword}%`;
         }
         if (minPrice !== undefined) {
-            sql += ` AND p.price >= :minP`;
-            params.minP = minPrice;
+            sql += ` AND p.price >= :p_min`;
+            params.p_min = minPrice;
         }
         if (maxPrice !== undefined) {
-            sql += ` AND p.price <= :maxP`;
-            params.maxP = maxPrice;
+            sql += ` AND p.price <= :p_max`;
+            params.p_max = maxPrice;
         }
         if (categoryId) {
             sql += ` AND p.product_id IN (
-                       SELECT product_id FROM BELONG WHERE category_id = :cid
+                       SELECT product_id FROM BELONG WHERE category_id = :p_cat_id
                      )`;
-            params.cid = categoryId;
+            params.p_cat_id = categoryId;
         }
 
-        sql += ` GROUP BY p.product_id, p.name, p.price, p.stock_quantity
+        sql += ` GROUP BY p.product_id, p.product_name, p.price, p.stock_quantity,
+                          p.image_url, p.product_size, p.brand, p.origin, p.created_at
                  ORDER BY p.created_at DESC`;
 
         const result = await conn.execute(sql, params);
