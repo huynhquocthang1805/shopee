@@ -1,10 +1,8 @@
 /**
  * api.js — Service layer kết nối với BE Oracle
- *
- * Dùng fetch() thuần, không cần axios. JWT token tự động gửi từ localStorage.
  */
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
-// === Helper ===
+
 function getToken() {
     return localStorage.getItem('token');
 }
@@ -45,9 +43,9 @@ async function request(path, { method = 'GET', body, auth = false } = {}) {
 
 // ═══ Auth ═══
 export const authApi = {
-    register: (data)         => request('/auth/register', { method: 'POST', body: data }),
-    login:    (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
-    me:       ()             => request('/auth/me', { auth: true }),
+    register: (data)               => request('/auth/register', { method: 'POST', body: data }),
+    login:    (username, password) => request('/auth/login',    { method: 'POST', body: { username, password } }),
+    me:       ()                   => request('/auth/me',       { auth: true }),
 };
 
 // ═══ Products ═══
@@ -63,18 +61,24 @@ export const productApi = {
         return request('/products/search?' + qs.toString());
     },
     bySeller:  (sellerId)      => request(`/products/seller/${sellerId}`),
-    create:    (data)          => request('/products', { method: 'POST', body: data, auth: true }),
-    update:    (id, data)      => request(`/products/${id}`, { method: 'PUT', body: data, auth: true }),
-    remove:    (id)            => request(`/products/${id}`, { method: 'DELETE', auth: true }),
+    create:    (data)          => request('/products',          { method: 'POST',   body: data, auth: true }),
+    update:    (id, data)      => request(`/products/${id}`,    { method: 'PUT',    body: data, auth: true }),
+    remove:    (id)            => request(`/products/${id}`,    { method: 'DELETE', auth: true }),
+};
+
+// ═══ Ratings ═══
+export const ratingApi = {
+    listByProduct: (productId)            => request(`/products/${productId}/ratings`),
+    create:        (productId, data)      => request(`/products/${productId}/ratings`, { method: 'POST', body: data, auth: true }),
 };
 
 // ═══ Orders ═══
 export const orderApi = {
-    create:        (data)        => request('/orders', { method: 'POST', body: data, auth: true }),
-    getMine:       ()            => request('/orders/me', { auth: true }),
+    create:        (data)        => request('/orders',                 { method: 'POST', body: data, auth: true }),
+    getMine:       ()            => request('/orders/me',              { auth: true }),
     getById:       (id)          => request(`/orders/${id}`),
     getStatistics: ()            => request('/orders/stats'),
-    updateStatus:  (id, status)  => request(`/orders/${id}/status`, { method: 'PUT', body: { status }, auth: true }),
+    updateStatus:  (id, status)  => request(`/orders/${id}/status`,    { method: 'PUT', body: { status }, auth: true }),
 };
 
 // === Token storage ===

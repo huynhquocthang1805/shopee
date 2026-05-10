@@ -56,3 +56,17 @@ export function normalizeOrder(o) {
         email:         o.EMAIL         || o.email,
     };
 }
+
+export function normalizeRating(r) {
+    if (!r) return null;
+    return {
+        rating_id:        r.RATING_ID         || r.rating_id,
+        user_id:          r.USER_ID           || r.user_id,
+        product_id:       r.PRODUCT_ID        || r.product_id,
+        rating:           Number(r.RATING     || r.rating || 0),
+        rating_comment:   r.RATING_COMMENT    || r.rating_comment,
+        created_at:       r.CREATED_AT        || r.created_at,
+        reviewer_name:    r.REVIEWER_NAME     || r.reviewer_name,
+        reviewer_username: r.REVIEWER_USERNAME || r.reviewer_username,
+    };
+}
