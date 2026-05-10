@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Cart3, BoxArrowRight, ArrowLeft, StarFill } from 'react-bootstrap-icons';
-import { productApi } from '../api/api';
+import { productApi, ratingApi } from '../api/api';
 import { useCart } from '../contexts/CartContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency, normalizeProduct } from '../utils/format';
+import RatingSection from '../components/products/RatingSection';
 
 const FALLBACK = 'https://placehold.co/450x450/eeeeee/999999?text=No+Image';
 
 export default function ProductDetailPage() {
-    const { id } = useParams();
-    const nav    = useNavigate();
+    const { id }  = useParams();
+    const nav     = useNavigate();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState(null);
     const [quantity, setQuantity] = useState(1);
+    const [ratingSummary, setRatingSummary] = useState({ avg_rating: 0, total_count: 0 });
 
     const { addItem } = useCart();
     const { show }    = useToast();
@@ -23,8 +25,15 @@ export default function ProductDetailPage() {
 
     useEffect(() => {
         setLoading(true); setError(null);
-        productApi.getById(id)
-            .then(data => setProduct(normalizeProduct(data)))
+        // Load song song product detail và rating summary
+        Promise.all([
+            productApi.getById(id),
+            ratingApi.listByProduct(id).catch(() => ({ summary: { avg_rating: 0, total_count: 0 } })),
+        ])
+            .then(([prodData, ratingData]) => {
+                setProduct(normalizeProduct(prodData));
+                if (ratingData?.summary) setRatingSummary(ratingData.summary);
+            })
             .catch(err => setError(err.message))
             .finally(() => setLoading(false));
     }, [id]);
@@ -72,10 +81,14 @@ export default function ProductDetailPage() {
                     <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                         <div className="flex items-center gap-1 text-shopee-500">
                             <StarFill size={14}/>
-                            <span>4.8</span>
+                            <span>
+                                {ratingSummary.total_count > 0
+                                    ? Number(ratingSummary.avg_rating).toFixed(1)
+                                    : 'Chưa có đánh giá'}
+                            </span>
                         </div>
                         <span>|</span>
-                        <span>Đã bán: 99+</span>
+                        <span>{ratingSummary.total_count} đánh giá</span>
                         <span>|</span>
                         <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{product.product_id}</span>
                     </div>
@@ -156,12 +169,16 @@ export default function ProductDetailPage() {
                 </div>
             </div>
 
+            {/* Mô tả chi tiết */}
             {product.description && (
                 <div className="bg-white rounded-lg shadow-sm p-6 mt-3">
                     <h2 className="font-bold text-base border-b pb-2 mb-3">Mô tả sản phẩm</h2>
                     <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{product.description}</p>
                 </div>
             )}
+
+            {/* Section đánh giá & bình luận */}
+            <RatingSection productId={product.product_id}/>
         </div>
     );
 }
