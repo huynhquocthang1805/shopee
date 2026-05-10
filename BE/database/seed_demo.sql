@@ -1,7 +1,17 @@
 -- =================================================================
--- seed_demo.sql — Phiên bản phong phú
+-- seed_demo.sql — Phiên bản phong phú v2
 -- 10 ngành hàng, 4 seller, ~30 sản phẩm đa dạng
--- Password mọi tài khoản demo: 123456
+-- Password mọi tài khoản demo: 123456 (đã được verify với bcrypt)
+--
+-- ⚠️ CẤU HÌNH TIẾNG VIỆT (BẮT BUỘC trước khi chạy file này):
+--   Windows CMD:        chcp 65001 && set NLS_LANG=.AL32UTF8
+--   Windows PowerShell: chcp 65001; $env:NLS_LANG=".AL32UTF8"
+--   Linux/macOS:        export NLS_LANG=.AL32UTF8
+--
+-- Sau đó chạy:
+--   sqlplus ecom_user/StrongPass123@//localhost:1521/orcl @seed_demo.sql
+--
+-- Xem chi tiết hướng dẫn ở: BE/database/README_VIETNAMESE.md
 -- =================================================================
 
 SET DEFINE OFF;
@@ -33,47 +43,47 @@ INSERT INTO CATEGORY (category_id, name) VALUES ('G0010', 'Thể thao & Du lịc
 COMMIT;
 
 -- =================================================================
--- 2. USERS (Password: 123456 đã hash bcrypt)
+-- 2. USERS — Hash bcrypt MỚI ĐÃ ĐƯỢC VERIFY cho password "123456"
 -- =================================================================
 INSERT INTO USERS (first_name, last_name, username, password, birthday, sex,
                    address, phone_number, email, role, created_at)
 VALUES ('Nguyễn', 'An', 'buyer01',
-        '$2a$10$dKwjcXfvBhxw3TjxGqH3I.TlGNCwsuNJXcRqAhPYFPxhGqOHlT9p2',
+        '$2b$10$E4Q1PrpBXDOpsJYuxFQzDur72rFcMT1bay6M/msY9tMw4fCg65oF6',
         DATE '2000-05-15', 'Nam', '123 Nguyễn Văn Cừ, Q.5, TPHCM', '0901234567',
         'buyer01@example.com', 'buyer', SYSTIMESTAMP);
 
 INSERT INTO USERS (first_name, last_name, username, password, birthday, sex,
                    address, phone_number, email, role, created_at)
 VALUES ('Trần', 'Bình', 'buyer02',
-        '$2a$10$dKwjcXfvBhxw3TjxGqH3I.TlGNCwsuNJXcRqAhPYFPxhGqOHlT9p2',
+        '$2b$10$E4Q1PrpBXDOpsJYuxFQzDur72rFcMT1bay6M/msY9tMw4fCg65oF6',
         DATE '1998-08-22', 'Nữ', '456 Lê Lợi, Q.1, TPHCM', '0908765432',
         'buyer02@example.com', 'buyer', SYSTIMESTAMP);
 
 INSERT INTO USERS (first_name, last_name, username, password, birthday, sex,
                    address, phone_number, email, role, created_at)
 VALUES ('Phạm', 'Cường', 'seller01',
-        '$2a$10$dKwjcXfvBhxw3TjxGqH3I.TlGNCwsuNJXcRqAhPYFPxhGqOHlT9p2',
+        '$2b$10$E4Q1PrpBXDOpsJYuxFQzDur72rFcMT1bay6M/msY9tMw4fCg65oF6',
         DATE '1995-03-10', 'Nam', '789 Hai Bà Trưng, Q.3, TPHCM', '0911223344',
         'seller01@example.com', 'seller', SYSTIMESTAMP);
 
 INSERT INTO USERS (first_name, last_name, username, password, birthday, sex,
                    address, phone_number, email, role, created_at)
 VALUES ('Lê', 'Dũng', 'seller02',
-        '$2a$10$dKwjcXfvBhxw3TjxGqH3I.TlGNCwsuNJXcRqAhPYFPxhGqOHlT9p2',
+        '$2b$10$E4Q1PrpBXDOpsJYuxFQzDur72rFcMT1bay6M/msY9tMw4fCg65oF6',
         DATE '1992-12-01', 'Nam', '321 CMT8, Q.10, TPHCM', '0922334455',
         'seller02@example.com', 'seller', SYSTIMESTAMP);
 
 INSERT INTO USERS (first_name, last_name, username, password, birthday, sex,
                    address, phone_number, email, role, created_at)
 VALUES ('Vũ', 'Hương', 'seller03',
-        '$2a$10$dKwjcXfvBhxw3TjxGqH3I.TlGNCwsuNJXcRqAhPYFPxhGqOHlT9p2',
+        '$2b$10$E4Q1PrpBXDOpsJYuxFQzDur72rFcMT1bay6M/msY9tMw4fCg65oF6',
         DATE '1990-07-20', 'Nữ', '12 Pasteur, Q.1, TPHCM', '0933445566',
         'seller03@example.com', 'seller', SYSTIMESTAMP);
 
 INSERT INTO USERS (first_name, last_name, username, password, birthday, sex,
                    address, phone_number, email, role, created_at)
 VALUES ('Hoàng', 'Minh', 'seller04',
-        '$2a$10$dKwjcXfvBhxw3TjxGqH3I.TlGNCwsuNJXcRqAhPYFPxhGqOHlT9p2',
+        '$2b$10$E4Q1PrpBXDOpsJYuxFQzDur72rFcMT1bay6M/msY9tMw4fCg65oF6',
         DATE '1988-11-05', 'Nam', '88 Nguyễn Trãi, Q.5, TPHCM', '0944556677',
         'seller04@example.com', 'seller', SYSTIMESTAMP);
 
@@ -105,7 +115,7 @@ BEGIN
   INSERT INTO SELLER (user_id, shop_name) VALUES (v_seller4, 'Home & Sports Minh');
   COMMIT;
 
-  -- ===== Seller 1 (TechZone): Điện thoại + Laptop =====
+  -- ===== Seller 1: Điện thoại + Laptop =====
   INSERT INTO PRODUCT (user_id, product_name, weight, product_size, origin, brand, description, price, stock_quantity, image_url, status)
   VALUES (v_seller1, 'iPhone 15 Pro Max 256GB Titan Tự Nhiên', 221, '16.0x7.7x0.83cm', 'USA', 'Apple',
     'Flagship Apple với chip A17 Pro, camera 48MP với zoom quang 5x, khung Titan nhẹ nhất. Màn hình Super Retina XDR ProMotion 120Hz.',
@@ -155,7 +165,7 @@ BEGIN
     'https://cdn.tgdd.vn/Products/Images/44/289922/dell-xps-13-plus-9320-i7-71017789-bac-thumb-600x600.jpg',
     'active');
 
-  -- ===== Seller 2 (AudioPro): Tai nghe + Phụ kiện =====
+  -- ===== Seller 2: Tai nghe + Phụ kiện =====
   INSERT INTO PRODUCT (user_id, product_name, weight, product_size, origin, brand, description, price, stock_quantity, image_url, status)
   VALUES (v_seller2, 'Tai nghe Sony WH-1000XM5 Bluetooth', 250, 'Headphone over-ear', 'Japan', 'Sony',
     'Tai nghe chống ồn flagship, pin 30 giờ, codec LDAC, kết nối Bluetooth 5.2 Multipoint. 8 micro chống ồn.',
@@ -205,7 +215,7 @@ BEGIN
     'https://cdn.tgdd.vn/Products/Images/57/315553/pin-sac-du-phong-magsafe-10000mah-anker-maggo-a1652-trang-thumb-600x600.jpg',
     'active');
 
-  -- ===== Seller 3 (Beauty & Fashion): Thời trang + Mỹ phẩm =====
+  -- ===== Seller 3: Thời trang + Mỹ phẩm =====
   INSERT INTO PRODUCT (user_id, product_name, weight, product_size, origin, brand, description, price, stock_quantity, image_url, status)
   VALUES (v_seller3, 'Áo thun Polo Nam Couple TX cao cấp', 250, 'L', 'Vietnam', 'Couple TX',
     'Áo polo cotton co giãn 4 chiều, thấm hút mồ hôi tốt. Phù hợp công sở và dạo phố. Có 5 màu.',
@@ -262,7 +272,7 @@ BEGIN
     'https://media.hcdn.vn/catalog/product/c/e/cetaphil-sua-rua-mat-gentle-skin-cleanser-250ml_img_500x500_dc25c0_fit_center.jpg',
     'active');
 
-  -- ===== Seller 4 (Home & Sports): Gia dụng + Sách + Thể thao + Thực phẩm =====
+  -- ===== Seller 4: Gia dụng + Sách + Thể thao + Thực phẩm =====
   INSERT INTO PRODUCT (user_id, product_name, weight, product_size, origin, brand, description, price, stock_quantity, image_url, status)
   VALUES (v_seller4, 'Nồi cơm điện Cuckoo CRP-G1015F 1.8L', 5800, '32x28x25cm', 'Korea', 'Cuckoo',
     'Nồi cơm điện cao tần Cuckoo Hàn Quốc, 12 chế độ nấu. Lòng nồi gang phủ kim cương 11 lớp.',
@@ -335,9 +345,7 @@ BEGIN
 
   COMMIT;
 
-  -- =================================================================
-  -- 4. PRODUCT-CATEGORY mapping (BELONG)
-  -- =================================================================
+  -- BELONG mapping
   INSERT INTO BELONG (product_id, category_id)
   SELECT product_id, 'G0001' FROM PRODUCT
    WHERE product_name LIKE 'iPhone%' OR product_name LIKE 'Samsung%'
@@ -386,24 +394,22 @@ BEGIN
 
   COMMIT;
 
-  -- =================================================================
-  -- 5. RATINGS demo
-  -- =================================================================
+  -- RATINGS demo
   INSERT INTO RATING (user_id, product_id, rating, rating_comment)
-  SELECT v_buyer1, product_id, 5, 'Sản phẩm tuyệt vời, đóng gói cẩn thận!'
+  SELECT v_buyer1, product_id, 5, 'Sản phẩm tuyệt vời, đóng gói cẩn thận, giao hàng nhanh!'
   FROM PRODUCT WHERE ROWNUM <= 5;
 
   INSERT INTO RATING (user_id, product_id, rating, rating_comment)
-  SELECT v_buyer2, product_id, 4.5, 'Hài lòng, giao hàng nhanh.'
+  SELECT v_buyer2, product_id, 4.5, 'Hài lòng với chất lượng, đúng như mô tả. Sẽ ủng hộ shop tiếp.'
   FROM PRODUCT WHERE ROWNUM <= 3;
 
   COMMIT;
 
   DBMS_OUTPUT.PUT_LINE('==========================================');
-  DBMS_OUTPUT.PUT_LINE('✅ Seed data complete!');
-  DBMS_OUTPUT.PUT_LINE('   Buyers : buyer01 / buyer02 (mật khẩu: 123456)');
-  DBMS_OUTPUT.PUT_LINE('   Sellers: seller01 → seller04 (mật khẩu: 123456)');
-  DBMS_OUTPUT.PUT_LINE('   Products: ~30 sản phẩm thuộc 10 ngành hàng');
+  DBMS_OUTPUT.PUT_LINE('Seed data complete!');
+  DBMS_OUTPUT.PUT_LINE('   Buyers : buyer01 / buyer02 (mat khau: 123456)');
+  DBMS_OUTPUT.PUT_LINE('   Sellers: seller01 ... seller04 (mat khau: 123456)');
+  DBMS_OUTPUT.PUT_LINE('   Products: ~30 san pham');
   DBMS_OUTPUT.PUT_LINE('==========================================');
 END;
 /
