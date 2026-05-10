@@ -3,8 +3,7 @@
  *
  * Dùng fetch() thuần, không cần axios. JWT token tự động gửi từ localStorage.
  */
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 // === Helper ===
 function getToken() {
     return localStorage.getItem('token');
